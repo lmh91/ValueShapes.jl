@@ -152,6 +152,19 @@ import Tables
             @test (B = copy(A); B[] = x; B[1]) == x
             @test (B = copy(A); B[1] = x; B[]) == x
             @test_throws ArgumentError copy(A)[] = (a = [5 3 5; 9 4 5], b = 9, c = 4.2, x = [11 21; 12 23], y = [4, 7, 5, 6])
+
+            @testset "Zygote support" begin
+                using Zygote
+
+                foo(x::NamedTuple) = sum(map(x -> x^2, values(x)))
+                x = [3, 4]
+                vs = NamedTupleShape(a = ScalarShape{Real}(), b = ScalarShape{Real}())
+
+                @test @inferred(Zygote.gradient(x -> x[].a^2 + x[].b^2, vs([3, 4]))) == ((a = 6.0, b = 8.0),)
+
+                # ToDo: Make this work with @inferred:
+                @test Zygote.gradient(x -> foo(vs(x)[]), [3, 4]) == ([6.0, 8.0],)
+            end
         end
 
 

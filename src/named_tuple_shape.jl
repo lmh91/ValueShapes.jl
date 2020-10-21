@@ -320,6 +320,42 @@ end
 Base.copy(A::ShapedAsNT) = ShapedAsNT(copy(_data(A)), _valshape(A))
 
 
+#!!!!!!!!!! ToDo: Need a way to ignore const values (zero/nothing gradient) in unshaped(gradient::NamedTuple, ::NamedTupleShape)
+
+# Zygote will currently ignore this, see Zygote.jl issue #811:
+#=
+function ChainRulesCore.rrule(::typeof(Base.getindex), x::ShapedAsNT)
+    function shapedasnt_getindex_pullback(ΔΩ::NamedTuple)
+        filled_ΔΩ = map(x -> isnothing(x) ? 0 : x, ΔΩ)
+        vs = valshape(x)
+        x_unshaped = unshaped(filled_ΔΩ, vs)
+        (ChainRulesCore.NO_FIELDS, vs(x_unshaped)) 
+    end
+    return x[], shapedasnt_getindex_pullback
+end
+#
+# So need to use
+ZygoteRules.@adjoint Base.getindex(x::ShapedAsNT) = x[], (ΔΩ::NamedTuple) -> begin
+    filled_ΔΩ = map(x -> isnothing(x) ? 0 : x, ΔΩ)
+    vs = valshape(x)
+    x_unshaped = unshaped(filled_ΔΩ, vs)
+    (vs(x_unshaped),) 
+end
+
+
+function ChainRulesCore.rrule(::Type{ShapedAsNT}, A::AbstractVector{<:Real}, vs::NamedTupleShape)
+    shapedasnt_pullback(ΔΩ::ShapedAsNT) = (ChainRulesCore.NO_FIELDS, unshaped(ΔΩ, vs), nothing)
+    return ShapedAsNT(A, vs), shapedasnt_pullback
+end
+#
+# Alternative:
+#=
+ZygoteRules.@adjoint ShapedAsNT(A::AbstractArray{<:Real}, vs::NamedTupleShape) = vs(A), (ΔΩ::ShapedAsNT) -> begin
+   (unshaped(ΔΩ, vs), nothing) 
+end
+=#
+
+
 
 """
     ShapedAsNTArray{T<:NamedTuple,...} <: AbstractArray{T,N}
